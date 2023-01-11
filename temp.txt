@@ -1,0 +1,286 @@
+import java.io.*;
+import java.util.*;
+
+
+public class Main {
+    public static Students [] stu;
+    public static Courses [] classes;
+    public static Professors [] prof;
+    public static TimeSlots [] time;
+    public static Rooms [] room;
+
+    public static void getPopandCon(){
+        Courses [] temp = new Courses[4];
+        for(Students s: stu){
+            temp = s.getPref();
+            for(int i=0; i<4; i++){
+                temp[i].incrPop();
+                for (int j = i+1; j<4; j++){
+                    if(temp[i].getPro().equal(temp[j].getPro())){
+                        temp[i].setCon(temp[j], Integer.MAX_VALUE);
+                        temp[j].setCon(temp[i], Integer.MAX_VALUE);
+                    } else {
+                        temp[i].incrCon(temp[j]);
+                        temp[j].incrCon(temp[i]);
+                    }
+                }
+            }
+        }
+    }
+
+    public static Courses[][] pairing(){
+        int total = classes.length * (classes.length-1) / 2;
+        Courses [][] returnArr = new Courses[total][2];
+        int count = 0;
+        for (int i = 0; i < classes.length-1; i++){
+            for (int j = i+1; j< classes.length; j++){
+                returnArr[count][0]=classes[i];
+                returnArr[count][1]=classes[j];
+                count++;
+            }
+        }
+
+        Arrays.sort(returnArr, new Comparator<Courses[]>() {
+            @Override
+                 //arguments to this method represent the arrays to be sorted   
+                 public int compare(Courses [] a, Courses [] b){
+                    int aa = a[0].getCConflict(a[1]);
+                    int bb = b[0].getCConflict(b[1]);
+                    if(aa > bb)
+                        return -1;
+                    if(aa < bb)
+                        return 1;
+                    return 0;
+                }
+     });
+        return returnArr;
+    }
+
+    public static void sortRoom(){
+        Arrays.sort(room, new Comparator<Rooms>() {
+            @Override
+                 //arguments to this method represent the arrays to be sorted   
+                 public int compare(Rooms a, Rooms b){
+                    int aa = a.getCap();
+                    int bb = b.getCap();
+                    if(aa > bb)
+                        return -1;
+                    if(aa < bb)
+                        return 1;
+                    return 0;
+                }
+     });
+    }
+
+    public static void scheduling(){
+        Courses [][] temp = pairing();
+        int size = temp.length;
+        int [] finalConlict = new int[time.length];
+        int finalCon, roomID, surplus, finalRoomID, finalT;
+        finalCon = 0;
+        roomID=-1;
+        surplus = Integer.MIN_VALUE;
+        finalRoomID = -1;
+        for(int i = 0; i < size; i++){
+            for (int m = 0; m <2; m++){
+                if(temp[i][m].notScheduled()){
+                    for(int j = 0; j < time.length; j++){
+                        for (int k = 0; k < room.length; k++){
+                            if (!room[k].isAssigned(time[k])){
+                                roomID = k;
+                                break;
+                            }
+                        }
+                        surplus = temp[i][m].getPop() - room[roomID].getCap();
+                        finalCon = Math.max(surplus, sumOfConflict(time[j], temp[i][m]));
+                        finalConlict[j] = finalCon;
+                    }
+                    Arrays.sort(finalConlict);
+                    finalT = 0;
+                    boolean samePro = true;
+                    while(samePro != false){
+                        samePro = false;
+                        for(int a =0; a< time[finalT].getCourse().size(); a++){
+                            Courses c = time[finalT].getCourse().get(a);
+                            if(c.getPro().equals(temp[i][m].getPro())){
+                                samePro = true;
+                                finalT ++;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // finalT = findMinCon(finalConlict);
+                    temp[i][m].setTime(time[finalT]);
+                    time[finalT].addClass(temp[i][m]);
+                    finalRoomID = roomID;
+                    for(int h = room.length-1; h > roomID; h--){
+                        if(room[h].getCap() > temp[i][m].getPop()){
+                            finalRoomID = h;
+                            break;
+                        }
+                    }
+                    temp[i][m].setRoom(room[finalRoomID]);
+                    room[finalRoomID].addCourse(temp[i][m], time[finalT]);
+                }
+            }
+        }
+    }
+
+    public static int findMinCon(int [] arr){
+        int id = 0;
+        int min = arr[0];
+        for (int i = 1; i < arr.length; i++){
+            if(arr[i]<min){
+                id = i;
+                min = arr[i];
+            }
+        }
+        return id;
+    }
+
+    public static int sumOfConflict(TimeSlots t, Courses c){
+        int conflict = 0;
+        for (int i =0; i< t.getCourse().size();i++) {
+            conflict += t.getCourse().get(i).getCConflict(c);
+        }
+        return conflict;
+    }
+
+    public static void enrollment() {
+        Courses [] temp = new Courses[4];
+        boolean available = true;
+        for(Students s :stu) {
+            temp = s.getPref();
+            for(int i=0; i<4; i++) {
+                for(int j=0; j<4; j++) {
+                    if(j != i) {
+                        if(temp[j].getTime().equals(temp[i].getTime())){
+                            available = false;
+                        }
+                    }
+                }
+                if((temp[i].getRoom().getCap() >= temp[i].getReg().size()) && available){
+                    temp[i].addStu(s);
+                    s.addReg(temp[i]);
+                }
+                available = true;
+            }
+        }
+    }
+
+    public static void readFile(String constraints, String prefs) throws FileNotFoundException, IOException{
+        BufferedReader con;
+        BufferedReader pre;
+        con = new BufferedReader(new FileReader(constraints));
+        String tmp;
+        String [] info;
+        boolean isRoom, isTeachers;
+        isRoom = false; isTeachers = false;
+        int tsize, rsize, csize, psize,index2, capacity, pIndex;
+        index2 = 0;tsize = 0; rsize = 0; csize = 0; psize = 0; capacity = 0; pIndex = 0;
+        while((tmp = con.readLine())!=null){
+            info = tmp.split("\\s+");
+            if(info[0].equals("Class")){
+                tsize = Integer.parseInt(info[2]);
+                time = new TimeSlots[tsize];
+                for (int i = 0; i < tsize; i++){
+                    time[i] = new TimeSlots(i);
+                }
+            } else if (info[0].equals("Rooms")) {
+                rsize = Integer.parseInt(info[1]);
+                room = new Rooms[rsize];
+                isRoom = true;
+            } else if (info[0].equals("Classes")){
+                csize = Integer.parseInt(info[1]);
+                classes = new Courses[csize];
+                for(int i = 0; i < csize; i++){
+                    classes[i] = new Courses(i, csize, tsize);
+                }
+            } else if (info[0].equals("Teachers")){
+                psize = Integer.parseInt(info[1]);
+                prof = new Professors[psize];
+                for(int i = 0; i < psize; i++){
+                    prof[i] = new Professors(i);
+                }
+                isTeachers = true;
+            } else {
+                if(isRoom && (!isTeachers)){
+                    int index1 = Integer.parseInt(info[0]);
+                    index1 = index1 - 1;
+                    capacity = Integer.parseInt(info[1]);
+                    room[index1] = new Rooms(index1, capacity, time);
+                }
+                if(isRoom && isTeachers){
+                    index2 = Integer.parseInt(info[0]) - 1;
+                    pIndex = Integer.parseInt(info[1]) - 1;
+                    classes[index2].setProf(prof[pIndex]);
+                    prof[pIndex].addCourse(classes[index2]);
+                }
+            }
+        }
+        pre = new BufferedReader(new FileReader(prefs));
+        tmp = pre.readLine();
+        info = tmp.split("\\s+");
+        int stuSize = Integer.parseInt(info[1]);
+        stu = new Students[stuSize];
+        for(int i = 0; i < stuSize; i++){
+            stu[i] = new Students(i);
+        }
+        int stuID, courseID;
+        stuID = -1;
+        courseID = -1;
+        while((tmp = pre.readLine())!=null){
+            info = tmp.split("\\s+");
+            stuID = Integer.parseInt(info[0]) - 1;
+            for(int i = 1; i <= 4; i++){
+                courseID = Integer.parseInt(info[i]) - 1;
+                stu[stuID].addPref(classes[courseID]);
+            }
+        }
+        pre.close();
+        con.close();
+    }
+
+    public static int outputSchedule(String file) throws IOException{
+        int preferenceVal = 0;
+        for (int i = 0; i < classes.length; i++){
+            preferenceVal += (classes[i].getReg()).size();
+        }
+        int stuID;
+        BufferedWriter pw = new BufferedWriter(new FileWriter(file));
+        String tmp = "";
+        tmp = "Course\tRoom\tTeacher\tTime\tStudents\n";
+        pw.write(tmp);
+        tmp = "";
+        for (int i = 0; i < classes.length; i++){
+            ArrayList<Students> regList = classes[i].getReg();
+            tmp += (i+1)+ "\t" + (classes[i].getRoom().getID() + 1) + "\t"
+                 + (classes[i].getPro().getID() + 1) + "\t" 
+                    + (classes[i].getTime().getID() + 1) + "\t";
+            for (int j = 0; j < regList.size(); j++){
+                stuID = regList.get(j).getID()+1;
+                tmp += stuID + " " ; 
+            }
+            pw.write(tmp + "\n");
+            tmp = "";
+        }
+        pw.flush();
+        pw.close();
+        return preferenceVal;
+    }
+
+    public static void main(String [] args) throws FileNotFoundException, IOException{
+        String con = args[0];
+        String pref = args[1];
+        String output = args[2];
+        readFile(con,pref);
+        getPopandCon();
+        scheduling();
+        enrollment();
+        int preferenceVal = outputSchedule(output);
+        System.out.println("Student Preference Value: " + preferenceVal);
+        System.out.println("Best Case Student Value: " + 4*stu.length);
+    }
+
+}
